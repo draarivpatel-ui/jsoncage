@@ -113,9 +113,9 @@ test('package metadata has required name version and license', () => {
   assert.equal(packageJson.license, 'MIT');
 });
 
-test('package has zero runtime and development dependencies', () => {
+test('package keeps runtime dependencies empty and fast-check development-only', () => {
   assert.deepEqual(packageJson.dependencies, {});
-  assert.deepEqual(packageJson.devDependencies, {});
+  assert.deepEqual(packageJson.devDependencies, { 'fast-check': '4.10.3' });
 });
 
 test('package requires Node 18 or newer', () => {
@@ -283,8 +283,9 @@ test('repository text files do not contain local absolute home paths or direct e
   }
 });
 
-test('node_modules is absent from the repository checkout', () => {
-  assert.equal(existsSync(path.join(root, 'node_modules')), false);
+test('dependency installation artifacts are ignored', () => {
+  const gitignore = readFileSync(path.join(root, '.gitignore'), 'utf8');
+  assert.match(gitignore, /^node_modules\/$/m);
 });
 
 test('generated CommonJS artifact is present and marked generated', () => {

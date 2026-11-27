@@ -39,7 +39,8 @@
   "scripts": {
     "build:cjs": "node scripts/build-cjs.mjs",
     "check:cjs": "node scripts/build-cjs.mjs --check",
-    "test": "node --test"
+    "test": "node --test",
+    "test:fuzz": "node --test test/fuzz.test.js"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -65,5 +66,7 @@
   "license": "MIT",
   "sideEffects": false,
   "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "fast-check": "4.10.3"
+  }
 }
