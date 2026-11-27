@@ -1,5 +1,7 @@
 # jsoncage
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/draarivpatel-ui/jsoncage/badge)](https://scorecard.dev/viewer/?uri=github.com/draarivpatel-ui/jsoncage)
+
 `jsoncage` is a zero-dependency Node.js security library for strict JSON parsing,
 inspection, canonicalization, JSON Pointer resolution, and JSON Merge Patch.
 It implements RFC 8259 syntax with I-JSON oriented interoperability checks and
