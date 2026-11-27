@@ -175,10 +175,13 @@ test('license is MIT and copyright holder is project contributors', () => {
   assert.match(license, /jsoncage contributors/);
 });
 
-test('gitattributes enforces LF for source documentation and configuration text', () => {
+test('gitattributes enforces LF for source documentation configuration and extensionless text', () => {
   const attributes = readFileSync(path.join(root, '.gitattributes'), 'utf8');
   for (const extension of ['*.mjs', '*.cjs', '*.js', '*.ts', '*.json', '*.md', '*.yml']) {
     assert.match(attributes, new RegExp(extension.replace('*', '\\*') + ' text eol=lf'));
+  }
+  for (const basename of ['.gitattributes', '.gitignore', 'LICENSE']) {
+    assert.match(attributes, new RegExp('^' + basename.replace('.', '\\.') + ' text eol=lf', 'm'));
   }
 });
 
