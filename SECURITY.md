@@ -12,10 +12,7 @@ Before the first public release, the `main` branch is the supported line.
 
 ## Reporting a vulnerability
 
-Do not open a public issue for an unpatched vulnerability. Use the private
-security reporting channel provided by the repository host when available, or
-open a minimal public issue that asks for a private contact without including
-reproduction details.
+Use the private GitHub Security Advisories form: [Report a vulnerability](https://github.com/draarivpatel-ui/jsoncage/security/advisories/new). Do not open a public issue for an exploitable finding.
 
 Include:
 
@@ -28,6 +25,8 @@ Include:
 
 Do not include secrets, cookies, private infrastructure addresses, or personal
 data in a report.
+
+We acknowledge reports within 48 hours. We aim to confirm or reject the report within 7 days, release a fix as soon as practical, and coordinate public disclosure with the reporter. Unless a shorter deadline is required by an actively exploited issue, please allow up to 90 days for a coordinated fix and disclosure.
 
 ## Scope
 
