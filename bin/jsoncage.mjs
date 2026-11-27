@@ -26,6 +26,30 @@ class CliIoError extends Error {
   }
 }
 
+function printableConsoleText(value) {
+  const text = String(value);
+  let output = '';
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text.charCodeAt(index);
+    if (
+      unit < 0x20 ||
+      unit === 0x7f ||
+      (unit >= 0x80 && unit <= 0x9f) ||
+      unit === 0x2028 ||
+      unit === 0x2029
+    ) {
+      output += '\\u' + unit.toString(16).padStart(4, '0');
+    } else {
+      output += text[index];
+    }
+  }
+  return output;
+}
+
+function writeStderrLine(message) {
+  process.stderr.write(printableConsoleText(message) + '\n');
+}
+
 function parsePositiveInteger(value, flag) {
   if (!/^[0-9]+$/.test(value)) throw new CliIoError(flag + ' requires a non-negative integer');
   const number = Number(value);
@@ -146,7 +170,7 @@ function readInput(input, options) {
 function formatFinding(finding) {
   const position = finding.position === undefined ? '' : ' at byte-independent character offset ' + finding.position;
   const key = finding.key === undefined ? '' : ' key ' + JSON.stringify(finding.key);
-  return finding.code + position + key + ': ' + finding.message;
+  return printableConsoleText(finding.code + position + key + ': ' + finding.message);
 }
 
 function runCheck(input, options, jsonOutput) {
@@ -184,7 +208,7 @@ function runCanonicalize(input, options) {
     return 0;
   } catch (error) {
     if (error instanceof JsonCageError) {
-      process.stderr.write(error.message + '\n');
+      writeStderrLine(error.message);
       return 1;
     }
     throw error;
@@ -196,7 +220,8 @@ function main() {
   try {
     parsed = parseArguments(process.argv.slice(2));
   } catch (error) {
-    process.stderr.write(error.message + '\n' + usage() + '\n');
+    writeStderrLine(error.message);
+    process.stderr.write(usage() + '\n');
     return 2;
   }
   if (parsed.help) {
@@ -209,14 +234,14 @@ function main() {
     return runCanonicalize(parsed.input, parsed.options);
   } catch (error) {
     if (error instanceof JsonCageError) {
-      process.stderr.write(error.message + '\n');
+      writeStderrLine(error.message);
       return 1;
     }
     if (error instanceof CliIoError) {
-      process.stderr.write(error.message + '\n');
+      writeStderrLine(error.message);
       return 2;
     }
-    process.stderr.write('unexpected error: ' + error.message + '\n');
+    writeStderrLine('unexpected error: ' + error.message);
     return 2;
   }
 }

@@ -46,6 +46,27 @@ test('unknown command exits 2', () => {
   assert.match(result.stderr, /unknown command/);
 });
 
+test('ANSI escape in unknown command is neutralized in stderr', () => {
+  const result = run(['\x1b[31mwat']);
+  assert.equal(result.status, 2);
+  assert.equal(result.stderr.includes('\x1b'), false);
+  assert.equal(result.stderr.includes('\\u001b[31mwat'), true);
+});
+
+test('ANSI escape in unknown option is neutralized in stderr', () => {
+  const result = run(['check', '-', '\x1b[32m--wat'], '{}');
+  assert.equal(result.status, 2);
+  assert.equal(result.stderr.includes('\x1b'), false);
+  assert.equal(result.stderr.includes('\\u001b[32m--wat'), true);
+});
+
+test('ANSI escape in file path errors is neutralized in stderr', () => {
+  const result = run(['check', path.join(scratch, 'missing-\x1b[31m.json')]);
+  assert.equal(result.status, 2);
+  assert.equal(result.stderr.includes('\x1b'), false);
+  assert.equal(result.stderr.includes('\\u001b[31m'), true);
+});
+
 test('missing input path exits 2', () => {
   const result = run(['check']);
   assert.equal(result.status, 2);
@@ -257,6 +278,23 @@ if (process.platform !== 'win32') {
     assert.equal(run(['check', file]).status, 0);
   });
 }
+
+test('FIFO or closest portable non-regular input exits two without blocking', () => {
+  if (process.platform === 'win32') {
+    assert.equal(run(['check', scratch]).status, 2);
+    return;
+  }
+  const fifo = path.join(scratch, 'input.fifo');
+  const made = spawnSync('mkfifo', [fifo]);
+  assert.equal(made.status, 0);
+  const result = run(['check', fifo]);
+  assert.equal(result.status, 2);
+});
+
+test('character device or closest portable non-regular input exits two', () => {
+  const input = process.platform === 'win32' ? scratch : '/dev/null';
+  assert.equal(run(['check', input]).status, 2);
+});
 
 test('CLI executable has a shebang and executable mode where mode bits are available', () => {
   if (process.platform === 'win32') {

@@ -63,6 +63,7 @@ const ERROR = JSONCAGE_ERROR_CODES;
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const DEFAULT_OPTIONS = Object.freeze({
   maxBytes: 1048576,
+  maxOutputBytes: 1048576,
   maxDepth: 32,
   maxKeys: 1000,
   maxArrayLength: 10000,
@@ -83,6 +84,7 @@ const DEFAULT_OPTIONS = Object.freeze({
 const OPTION_KEYS = new Set(Object.keys(DEFAULT_OPTIONS));
 const INTEGER_OPTION_KEYS = [
   'maxBytes',
+  'maxOutputBytes',
   'maxDepth',
   'maxKeys',
   'maxArrayLength',
@@ -238,6 +240,15 @@ function readHex4(text, position) {
 
 function isDigit(unit) {
   return unit >= 0x30 && unit <= 0x39;
+}
+
+function numberMantissaHasNonZeroDigit(raw) {
+  for (let index = 0; index < raw.length; index += 1) {
+    const unit = raw.charCodeAt(index);
+    if (unit === 0x65 || unit === 0x45) break;
+    if (unit >= 0x31 && unit <= 0x39) return true;
+  }
+  return false;
 }
 
 function isWhitespaceUnit(unit) {
@@ -627,6 +638,12 @@ function parseJsonText(text, options, inspection) {
           position: start
         });
       }
+    } else if (value === 0 && numberMantissaHasNonZeroDigit(raw)) {
+      if (options.rejectNumberOverflow) {
+        recoverable(ERROR.NUMBER_OVERFLOW, 'nonzero number underflows to zero in the finite IEEE-754 range', {
+          position: start
+        });
+      }
     } else if (Number.isInteger(value) && Math.abs(value) > Number.MAX_SAFE_INTEGER) {
       stats.unsafeIntegersFound += 1;
       if (options.rejectUnsafeIntegers) {
@@ -866,6 +883,23 @@ function decodePointerSegment(segment, position) {
   return output;
 }
 
+function readPointerOwnDataValue(container, key, path, notFoundMessage) {
+  const descriptor = Object.getOwnPropertyDescriptor(container, key);
+  if (!descriptor) {
+    throw new JsonCageError(ERROR.POINTER_NOT_FOUND, notFoundMessage, {
+      key,
+      path
+    });
+  }
+  if (!Object.hasOwn(descriptor, 'value')) {
+    throw new JsonCageError(ERROR.UNSUPPORTED_VALUE, 'accessor properties are not JSON data', {
+      key,
+      path
+    });
+  }
+  return descriptor.value;
+}
+
 export function resolveJsonPointer(document, pointer, options) {
   const normalized = normalizeOptions(options);
   if (typeof pointer !== 'string') {
@@ -938,15 +972,19 @@ export function resolveJsonPointer(document, pointer, options) {
           path: path.join('')
         });
       }
-      current = current[arrayIndex];
+      current = readPointerOwnDataValue(
+        current,
+        String(arrayIndex),
+        path.join(''),
+        'array index does not exist as an own data element'
+      );
     } else if (current !== null && typeof current === 'object') {
-      if (!Object.hasOwn(current, segment)) {
-        throw new JsonCageError(ERROR.POINTER_NOT_FOUND, 'object key does not exist as an own property', {
-          key: segment,
-          path: path.join('')
-        });
-      }
-      current = current[segment];
+      current = readPointerOwnDataValue(
+        current,
+        segment,
+        path.join(''),
+        'object key does not exist as an own property'
+      );
     } else {
       throw new JsonCageError(ERROR.POINTER_NOT_FOUND, 'cannot resolve through a primitive JSON value', {
         key: segment,
@@ -962,6 +1000,35 @@ function isJsonObject(value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === null || prototype === Object.prototype;
+}
+
+function isCanonicalArrayIndexName(name, length) {
+  if (!/^(0|[1-9][0-9]*)$/.test(name)) return false;
+  const index = Number(name);
+  return index < length && String(index) === name;
+}
+
+function validateJsonDataShape(value, path) {
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    unsupportedValue('symbol-keyed properties are not representable as strict JSON', path);
+  }
+  const names = Object.getOwnPropertyNames(value);
+  if (Array.isArray(value)) {
+    for (const name of names) {
+      if (name === 'length') continue;
+      if (!isCanonicalArrayIndexName(name, value.length)) {
+        unsupportedValue('array properties outside the element index range are not representable as strict JSON', path);
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(value, name);
+      if (!descriptor || !descriptor.enumerable) {
+        unsupportedValue('non-enumerable array elements are not representable as strict JSON', path);
+      }
+    }
+    return;
+  }
+  if (names.length !== Object.keys(value).length) {
+    unsupportedValue('non-enumerable object properties are not representable as strict JSON', path);
+  }
 }
 
 function unsupportedValue(message, path) {
@@ -989,6 +1056,13 @@ function validateJsonPrimitive(value, options, path) {
     return;
   }
   if (typeof value === 'string') {
+    if (value.length > options.maxStringLength) {
+      throw new JsonCageError(ERROR.MAX_STRING_LENGTH, 'maximum string length exceeded', {
+        limit: options.maxStringLength,
+        actual: value.length,
+        path
+      });
+    }
     if (hasLoneSurrogate(value)) {
       throw new JsonCageError(ERROR.LONE_SURROGATE, 'lone UTF-16 surrogate in string', { path });
     }
@@ -1058,6 +1132,7 @@ function cloneJsonValue(value, options, context, parentDepth, path, active) {
   if (!Array.isArray(value) && !isJsonObject(value)) {
     unsupportedValue('only plain objects, arrays, and JSON primitives are supported', path);
   }
+  validateJsonDataShape(value, path);
   if (active.has(value)) {
     throw new JsonCageError(ERROR.CYCLE_DETECTED, 'cyclic object graph detected', { path });
   }
@@ -1123,6 +1198,7 @@ function cloneJsonValue(value, options, context, parentDepth, path, active) {
         if (!Array.isArray(child) && !isJsonObject(child)) {
           unsupportedValue('only plain objects, arrays, and JSON primitives are supported', childPath);
         }
+        validateJsonDataShape(child, childPath);
         if (active.has(child)) {
           throw new JsonCageError(ERROR.CYCLE_DETECTED, 'cyclic object graph detected', { path: childPath });
         }
@@ -1163,6 +1239,8 @@ function makeMergeFrame(targetObject, patchObject, output, depth, path, options,
   }
   activePatches.add(patchObject);
   if (targetObject) activeTargets.add(targetObject);
+  validateJsonDataShape(patchObject, path);
+  if (targetObject) validateJsonDataShape(targetObject, path);
 
   const patchKeys = Object.keys(patchObject);
   if (patchKeys.length > options.maxKeys) {
@@ -1312,8 +1390,10 @@ function escapeJsonString(value, path) {
 }
 
 function validateContainerForSerialization(value, path) {
-  if (Array.isArray(value)) return;
-  if (!isJsonObject(value)) unsupportedValue('only plain objects, arrays, and JSON primitives are supported', path);
+  if (!Array.isArray(value) && !isJsonObject(value)) {
+    unsupportedValue('only plain objects, arrays, and JSON primitives are supported', path);
+  }
+  validateJsonDataShape(value, path);
 }
 
 function serializePrimitive(value, options, path) {
@@ -1332,9 +1412,9 @@ function serializeJson(value, options, canonical) {
 
   function append(piece) {
     outputBytes += utf8ByteLength(piece);
-    if (outputBytes > options.maxBytes) {
+    if (outputBytes > options.maxOutputBytes) {
       throw new JsonCageError(ERROR.MAX_BYTES, 'maximum serialized output byte length exceeded', {
-        limit: options.maxBytes,
+        limit: options.maxOutputBytes,
         actual: outputBytes
       });
     }

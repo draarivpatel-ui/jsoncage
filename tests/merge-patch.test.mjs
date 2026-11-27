@@ -366,3 +366,49 @@ test('valid scalar root target is treated as empty object for an object patch', 
   assertJsonEqual(applySafeMergePatch(0, { a: 1 }), { a: 1 });
 });
 
+test('merge string length cap applies to replacement values', () => {
+  assertJsonCageError(
+    () => applySafeMergePatch({}, { x: 'x'.repeat(7) }, { maxStringLength: 6 }),
+    'JSONCAGE_MAX_STRING_LENGTH'
+  );
+  assertJsonEqual(applySafeMergePatch({}, { x: 'x'.repeat(6) }, { maxStringLength: 6 }), { x: 'xxxxxx' });
+});
+
+test('merge string length cap applies to copied target values', () => {
+  assertJsonCageError(
+    () => applySafeMergePatch({ x: 'x'.repeat(7) }, {}, { maxStringLength: 6 }),
+    'JSONCAGE_MAX_STRING_LENGTH'
+  );
+});
+
+test('array extra properties in replacement values are rejected rather than silently dropped', () => {
+  const array = [1];
+  array.extra = 2;
+  assertJsonCageError(() => applySafeMergePatch({}, { x: array }), 'JSONCAGE_UNSUPPORTED_VALUE');
+});
+
+test('array extra properties in copied target values are rejected rather than silently dropped', () => {
+  const array = [1];
+  array.extra = 2;
+  assertJsonCageError(() => applySafeMergePatch({ x: array }, {}), 'JSONCAGE_UNSUPPORTED_VALUE');
+});
+
+test('object non-enumerable properties in patch objects are rejected rather than silently dropped', () => {
+  const patch = {};
+  Object.defineProperty(patch, 'hidden', { value: 1, enumerable: false });
+  assertJsonCageError(() => applySafeMergePatch({}, patch), 'JSONCAGE_UNSUPPORTED_VALUE');
+});
+
+test('object symbol-keyed properties in target objects are rejected rather than silently dropped', () => {
+  const target = {};
+  target[Symbol('hidden')] = 1;
+  assertJsonCageError(() => applySafeMergePatch(target, {}), 'JSONCAGE_UNSUPPORTED_VALUE');
+});
+
+test('one thousand nested merge patch objects do not overflow the JavaScript call stack', () => {
+  let patch = 1;
+  for (let index = 0; index < 1000; index += 1) patch = { a: patch };
+  const result = applySafeMergePatch({}, patch, { maxDepth: 1001, maxNodes: 2000 });
+  assert.equal(Object.getPrototypeOf(result), null);
+});
+

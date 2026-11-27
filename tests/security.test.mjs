@@ -33,7 +33,8 @@ const duplicatePayloads = [
   '{"a":{"b":1},"a":{"c":2}}',
   '{"a":[],"a":{}}',
   '{"a":null,"a":false}',
-  '{"a":0,"a":-0}'
+  '{"a":0,"a":-0}',
+  '{"\\uD83D\\uDE00":1,"😀":2}'
 ];
 
 for (const source of duplicatePayloads) {
@@ -271,6 +272,32 @@ test('number overflow can be explicitly relaxed', () => {
   assert.equal(parseSafeJson('1e400', { rejectNumberOverflow: false }), Infinity);
 });
 
+test('positive nonzero number underflowing to zero is rejected by default', () => {
+  assertJsonCageError(() => parseSafeJson('1e-400'), 'JSONCAGE_NUMBER_OVERFLOW');
+});
+
+test('negative nonzero number underflowing to zero is rejected by default', () => {
+  assertJsonCageError(() => parseSafeJson('-1e-400'), 'JSONCAGE_NUMBER_OVERFLOW');
+});
+
+test('nonzero mantissa with a huge negative exponent is rejected before numeric evaluation loss', () => {
+  assertJsonCageError(() => parseSafeJson('0.0001e999999999999999999999999', { rejectNumberOverflow: true }), 'JSONCAGE_NUMBER_OVERFLOW');
+  assertJsonCageError(() => parseSafeJson('0.0001e-999999999999999999999999'), 'JSONCAGE_NUMBER_OVERFLOW');
+});
+
+test('exact zero with a huge negative exponent remains valid JSON', () => {
+  assert.equal(parseSafeJson('0e-999999999999999999999999'), 0);
+  assert.equal(Object.is(parseSafeJson('-0e-999999999999999999999999'), -0), true);
+});
+
+test('number underflow can be explicitly relaxed', () => {
+  assert.equal(parseSafeJson('1e-400', { rejectNumberOverflow: false }), 0);
+});
+
+test('minimum positive subnormal remains accepted', () => {
+  assert.equal(parseSafeJson('5e-324'), 5e-324);
+});
+
 test('largest finite double is accepted', () => {
   assert.equal(parseSafeJson('1.7976931348623157e308'), 1.7976931348623157e308);
 });
@@ -289,6 +316,12 @@ test('unsafe negative integer is counted in inspection', () => {
 
 test('unsafe integer is rejected when explicitly enabled', () => {
   assertJsonCageError(() => parseSafeJson('9007199254740993', { rejectUnsafeIntegers: true }), 'JSONCAGE_UNSAFE_INTEGER');
+});
+
+test('integral fraction and exponent spellings are rejected in strict integer mode', () => {
+  for (const source of ['9007199254740992.0', '9.007199254740993e15', '-9007199254740992.0']) {
+    assertJsonCageError(() => parseSafeJson(source, { rejectUnsafeIntegers: true }), 'JSONCAGE_UNSAFE_INTEGER');
+  }
 });
 
 test('maximum safe integer is accepted in strict integer mode', () => {
@@ -425,6 +458,7 @@ test('error object does not embed the full payload', () => {
 const invalidOptionCases = [
   [{ unknown: true }, 'unknown option'],
   [{ maxBytes: 0 }, 'maxBytes'],
+  [{ maxOutputBytes: 0 }, 'maxOutputBytes'],
   [{ maxDepth: 0 }, 'maxDepth'],
   [{ maxKeys: 0 }, 'maxKeys'],
   [{ maxArrayLength: 0 }, 'maxArrayLength'],

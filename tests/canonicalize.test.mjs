@@ -261,21 +261,26 @@ test('serialization node cap counts root array and scalar elements', () => {
 });
 
 test('serialization output byte cap accepts exact ASCII byte size', () => {
-  assert.equal(canonicalizeJson({ a: 1 }, { maxBytes: 7 }), '{"a":1}');
+  assert.equal(canonicalizeJson({ a: 1 }, { maxOutputBytes: 7 }), '{"a":1}');
 });
 
 test('serialization output byte cap rejects one byte over', () => {
-  assertJsonCageError(() => canonicalizeJson({ a: 1 }, { maxBytes: 6 }), 'JSONCAGE_MAX_BYTES');
+  assertJsonCageError(() => canonicalizeJson({ a: 1 }, { maxOutputBytes: 6 }), 'JSONCAGE_MAX_BYTES');
 });
 
 test('serialization byte cap measures Unicode output in UTF-8 bytes', () => {
-  assert.equal(canonicalizeJson('é', { maxBytes: 4 }), '"é"');
-  assertJsonCageError(() => canonicalizeJson('é', { maxBytes: 3 }), 'JSONCAGE_MAX_BYTES');
+  assert.equal(canonicalizeJson('é', { maxOutputBytes: 4 }), '"é"');
+  assertJsonCageError(() => canonicalizeJson('é', { maxOutputBytes: 3 }), 'JSONCAGE_MAX_BYTES');
 });
 
 test('serialization byte cap measures astral output as four UTF-8 bytes', () => {
-  assert.equal(canonicalizeJson('😀', { maxBytes: 6 }), '"😀"');
-  assertJsonCageError(() => canonicalizeJson('😀', { maxBytes: 5 }), 'JSONCAGE_MAX_BYTES');
+  assert.equal(canonicalizeJson('😀', { maxOutputBytes: 6 }), '"😀"');
+  assertJsonCageError(() => canonicalizeJson('😀', { maxOutputBytes: 5 }), 'JSONCAGE_MAX_BYTES');
+});
+
+test('input byte cap does not silently replace the independent output byte cap', () => {
+  assert.equal(canonicalizeJson({ a: 1 }, { maxBytes: 1 }), '{"a":1}');
+  assertJsonCageError(() => canonicalizeJson({ a: 1 }, { maxBytes: 1, maxOutputBytes: 6 }), 'JSONCAGE_MAX_BYTES');
 });
 
 test('serialization object key count cap is enforced', () => {
@@ -312,6 +317,45 @@ test('canonicalize does not mutate input key order or values', () => {
 
 test('serializer throws before returning partial output for late errors', () => {
   assertJsonCageError(() => canonicalizeJson({ good: 1, bad: NaN }), 'JSONCAGE_NUMBER_OVERFLOW');
+});
+
+test('serialization string length cap is enforced before output construction', () => {
+  assertJsonCageError(() => canonicalizeJson('x'.repeat(7), { maxStringLength: 6 }), 'JSONCAGE_MAX_STRING_LENGTH');
+  assert.equal(canonicalizeJson('x'.repeat(6), { maxStringLength: 6 }), '"xxxxxx"');
+});
+
+test('array extra enumerable properties are rejected rather than silently dropped', () => {
+  const array = [1];
+  array.extra = 2;
+  assertJsonCageError(() => stringifySafeJson(array), 'JSONCAGE_UNSUPPORTED_VALUE');
+});
+
+test('array extra non-enumerable properties are rejected rather than silently dropped', () => {
+  const array = [1];
+  Object.defineProperty(array, 'extra', { value: 2, enumerable: false });
+  assertJsonCageError(() => stringifySafeJson(array), 'JSONCAGE_UNSUPPORTED_VALUE');
+});
+
+test('array symbol-keyed properties are rejected rather than silently dropped', () => {
+  const array = [1];
+  array[Symbol('extra')] = 2;
+  assertJsonCageError(() => stringifySafeJson(array), 'JSONCAGE_UNSUPPORTED_VALUE');
+});
+
+test('object non-enumerable properties are rejected rather than silently dropped', () => {
+  const object = {};
+  Object.defineProperty(object, 'hidden', { value: 1, enumerable: false });
+  assertJsonCageError(() => stringifySafeJson(object), 'JSONCAGE_UNSUPPORTED_VALUE');
+});
+
+test('object symbol-keyed properties are rejected rather than silently dropped', () => {
+  const object = {};
+  object[Symbol('hidden')] = 1;
+  assertJsonCageError(() => stringifySafeJson(object), 'JSONCAGE_UNSUPPORTED_VALUE');
+});
+
+test('canonicalize separates BMP and astral keys by UTF-16 code units', () => {
+  assert.equal(canonicalizeJson({ '\ue000': 1, '😀': 2 }), '{"😀":2,"\ue000":1}');
 });
 
 test('very deep but bounded iterative serialization does not use recursive JavaScript calls', () => {

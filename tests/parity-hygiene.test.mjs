@@ -150,8 +150,8 @@ test('package files list includes runtime types bin docs and community files', (
   }
 });
 
-test('test script uses explicit Windows-safe glob', () => {
-  assert.equal(packageJson.scripts.test, 'node --test tests/*.test.mjs');
+test('test script uses Node built-in discovery portable to Windows and Node 18', () => {
+  assert.equal(packageJson.scripts.test, 'node --test');
 });
 
 test('module is marked side-effect free', () => {

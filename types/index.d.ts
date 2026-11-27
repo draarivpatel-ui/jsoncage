@@ -2,8 +2,10 @@ export type DuplicateKeyPolicy = 'reject' | 'first' | 'last';
 export type PrototypeKeyPolicy = 'reject' | 'strip';
 
 export interface JsonCageOptions {
-  /** Maximum input or output size measured in UTF-8 bytes. Default 1048576. */
+  /** Maximum input size measured in UTF-8 bytes. Default 1048576. */
   maxBytes?: number;
+  /** Maximum serialized output size measured in UTF-8 bytes. Default 1048576. */
+  maxOutputBytes?: number;
   /** Maximum nested array or object depth. Scalar values do not add structural depth. Default 32. */
   maxDepth?: number;
   /** Maximum keys in one object. Default 1000. */
@@ -12,7 +14,7 @@ export interface JsonCageOptions {
   maxArrayLength?: number;
   /** Maximum total JSON values. Default 50000. */
   maxNodes?: number;
-  /** Maximum decoded string length in UTF-16 code units. Default 65536. */
+  /** Maximum parsed or serialized string length in UTF-16 code units. Default 65536. */
   maxStringLength?: number;
   /** Maximum object key length in UTF-16 code units. Default 256. */
   maxKeyLength?: number;
@@ -20,7 +22,7 @@ export interface JsonCageOptions {
   duplicateKeys?: DuplicateKeyPolicy;
   /** Prototype pollution key policy. Default 'reject'. */
   protoPolicy?: PrototypeKeyPolicy;
-  /** Create parsed and merged objects with a null prototype. Default true. */
+  /** Create parsed objects with a null prototype. Merge outputs always use null prototypes. Default true. */
   nullPrototype?: boolean;
   /** Reject a leading Unicode byte order mark. Default true. */
   rejectBom?: boolean;
@@ -30,7 +32,7 @@ export interface JsonCageOptions {
   rejectNulStrings?: boolean;
   /** Reject integers outside the exact IEEE-754 safe integer range. Default false. */
   rejectUnsafeIntegers?: boolean;
-  /** Reject numbers that overflow to Infinity or -Infinity. Default true. */
+  /** Reject numbers that overflow to Infinity or -Infinity, or nonzero numbers that underflow to zero. Default true. */
   rejectNumberOverflow?: boolean;
   /** Maximum JSON Pointer size in UTF-8 bytes. Default 4096. */
   maxPointerBytes?: number;

@@ -36,7 +36,7 @@ In scope:
 - duplicate-key acceptance or inconsistent escape-equivalent key handling
 - prototype pollution through parsing, pointers, merge patch, or serialization
 - recursion or stack exhaustion before configured depth limits are enforced
-- bypasses of byte, depth, key, array-length, string-length, or total-node caps
+- bypasses of input-byte, serialized-output-byte, depth, key, array-length, string-length, or total-node caps
 - malformed UTF-8 or lone-surrogate acceptance contrary to the documented policy
 - JSON Pointer inherited-property reads or prototype-key traversal
 - merge-patch mutation of caller-owned inputs

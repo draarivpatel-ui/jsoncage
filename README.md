@@ -57,8 +57,9 @@ JSON numbers have arbitrary mathematical precision in the grammar, but most
 languages map them to finite binary or decimal types. Integers above
 `Number.MAX_SAFE_INTEGER` can round in JavaScript while remaining exact in
 another language or database. Very large exponents can become `Infinity` in a
-JavaScript consumer while being rejected elsewhere. `jsoncage` rejects finite
-range overflow by default and can reject unsafe integers with
+JavaScript consumer while being rejected elsewhere, and very small nonzero
+values can collapse to zero. `jsoncage` rejects finite range overflow and
+nonzero underflow to zero by default, and can reject unsafe integers with
 `rejectUnsafeIntegers: true`.
 
 ### Unicode and encoding confusion
@@ -197,6 +198,7 @@ Security behavior:
 - `~0` and `~1` are the only accepted tilde escapes.
 - `__proto__`, `constructor`, and `prototype` segments are rejected.
 - Object segments must exist as own properties through `Object.hasOwn`.
+- Accessor properties are rejected without invoking their getters.
 - Inherited properties such as `toString` and `valueOf` can never be read.
 - Array indexes must be canonical non-negative decimal integers.
 - Leading zeros, negative indexes, the JSON Patch append token `-`, and
@@ -224,9 +226,10 @@ Security behavior:
 - Prototype pollution keys are rejected by default and stripped only with
   `protoPolicy: 'strip'`.
 - Arrays are replacement values, as required by RFC 7396.
-- Depth, key-count, array-length, and total-node limits are enforced.
+- Depth, key-count, array-length, string-length, and total-node limits are enforced.
 - Cyclic object graphs, accessors, class instances, unsupported values,
-  non-finite numbers, and lone surrogates fail closed.
+  non-enumerable or symbol-keyed data, extra array properties, non-finite
+  numbers, and lone surrogates fail closed.
 - The algorithm uses explicit work stacks rather than recursive JavaScript
   calls.
 
@@ -243,19 +246,21 @@ conformance without an external conformance suite.
 Serializes strict JSON while preserving object key enumeration order. Both
 serializers reject unsupported values instead of silently dropping object
 properties or converting `undefined`, `NaN`, or `Infinity` to JSON values.
-Cycles, lone surrogates, accessors, class instances, excess depth, excess node
-count, excess output bytes, and non-finite numbers fail closed.
+Cycles, lone surrogates, accessors, class instances, non-enumerable or
+symbol-keyed data, extra array properties, excess depth, excess node count,
+excess string length, excess output bytes, and non-finite numbers fail closed.
 
 ## Options
 
 | Option | Default | Meaning |
 | --- | ---: | --- |
-| `maxBytes` | `1048576` | Maximum input or serialized output size in UTF-8 bytes |
+| `maxBytes` | `1048576` | Maximum input size in UTF-8 bytes |
+| `maxOutputBytes` | `1048576` | Maximum serialized output size in UTF-8 bytes |
 | `maxDepth` | `32` | Maximum nested array or object depth; scalar values do not add structural depth |
 | `maxKeys` | `1000` | Maximum keys in one object |
 | `maxArrayLength` | `10000` | Maximum elements in one array |
 | `maxNodes` | `50000` | Maximum total JSON values |
-| `maxStringLength` | `65536` | Maximum decoded string length in UTF-16 code units |
+| `maxStringLength` | `65536` | Maximum parsed or serialized string length in UTF-16 code units |
 | `maxKeyLength` | `256` | Maximum object key length in UTF-16 code units |
 | `duplicateKeys` | `'reject'` | `'reject'`, or explicit opt-in to `'first'` or `'last'` |
 | `protoPolicy` | `'reject'` | `'reject'` or explicit opt-in to `'strip'` |
@@ -264,7 +269,7 @@ count, excess output bytes, and non-finite numbers fail closed.
 | `rejectNulKeys` | `true` | Reject NUL characters in object keys |
 | `rejectNulStrings` | `false` | Reject NUL characters in string values |
 | `rejectUnsafeIntegers` | `false` | Reject integers outside the exact safe integer range |
-| `rejectNumberOverflow` | `true` | Reject numeric literals that overflow to non-finite numbers |
+| `rejectNumberOverflow` | `true` | Reject numeric literals that overflow to non-finite numbers or nonzero literals that underflow to zero |
 | `maxPointerBytes` | `4096` | Maximum JSON Pointer byte length |
 | `maxPointerSegments` | `128` | Maximum JSON Pointer segment count |
 
@@ -285,7 +290,7 @@ security control from silently disappearing.
 | `JSONCAGE_MAX_STRING_LENGTH` | String length limit exceeded |
 | `JSONCAGE_MAX_KEY_LENGTH` | Object key length limit exceeded |
 | `JSONCAGE_LONE_SURROGATE` | Unpaired UTF-16 high or low surrogate |
-| `JSONCAGE_NUMBER_OVERFLOW` | Number overflows the finite IEEE-754 range or a non-finite number was supplied |
+| `JSONCAGE_NUMBER_OVERFLOW` | Number overflows the finite IEEE-754 range, a nonzero number underflows to zero, or a non-finite number was supplied |
 | `JSONCAGE_UNSAFE_INTEGER` | Integer cannot be represented exactly as a JavaScript number |
 | `JSONCAGE_INVALID_UTF8` | Byte input is not well-formed UTF-8 |
 | `JSONCAGE_SYNTAX_ERROR` | Input violates strict RFC 8259 syntax |
@@ -310,7 +315,9 @@ jsoncage canonicalize <file-or-dash> [--strict-integers]
 ```
 
 Use `-` to read standard input. File inputs must be regular files. Directories,
-devices, FIFOs, and symbolic links are rejected before reading. Exit codes are:
+devices, FIFOs, and symbolic links are rejected before reading. Error output
+neutralizes terminal control characters in user-controlled command arguments
+and file paths. Exit codes are:
 
 - `0`: safe input or successful canonicalization
 - `1`: unsafe JSON findings or canonicalization input rejected
@@ -355,7 +362,8 @@ npm pack --dry-run
 ```
 
 The project has zero runtime dependencies and zero development dependencies.
-Tests use only the Node.js built-in test runner.
+Tests use only the Node.js built-in test runner. The checked-in suite currently
+passes 939 tests.
 
 ## License
 

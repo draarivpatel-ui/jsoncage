@@ -171,6 +171,38 @@ test('array object numeric-looking property still uses array rules', () => {
   assertJsonCageError(() => resolveJsonPointer(array, '/extra'), 'JSONCAGE_POINTER_NOT_FOUND');
 });
 
+test('object accessor property is rejected without invoking the getter', () => {
+  const document = {};
+  let invoked = false;
+  Object.defineProperty(document, 'x', {
+    enumerable: true,
+    get() {
+      invoked = true;
+      throw new Error('getter must not run');
+    }
+  });
+  assertJsonCageError(() => resolveJsonPointer(document, '/x'), 'JSONCAGE_UNSUPPORTED_VALUE');
+  assert.equal(invoked, false);
+});
+
+test('array accessor element is rejected without invoking the getter', () => {
+  const array = [];
+  let invoked = false;
+  Object.defineProperty(array, '0', {
+    enumerable: true,
+    get() {
+      invoked = true;
+      throw new Error('getter must not run');
+    }
+  });
+  assertJsonCageError(() => resolveJsonPointer(array, '/0'), 'JSONCAGE_UNSUPPORTED_VALUE');
+  assert.equal(invoked, false);
+});
+
+test('array hole is not found instead of resolving to undefined', () => {
+  assertJsonCageError(() => resolveJsonPointer(new Array(1), '/0'), 'JSONCAGE_POINTER_NOT_FOUND');
+});
+
 test('pointer type must be a string', () => {
   assertJsonCageError(() => resolveJsonPointer({}, 0), 'JSONCAGE_INVALID_INPUT');
   assertJsonCageError(() => resolveJsonPointer({}, null), 'JSONCAGE_INVALID_INPUT');
